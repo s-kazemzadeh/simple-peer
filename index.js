@@ -373,6 +373,7 @@ class Peer extends stream.Duplex {
       this._batchedNegotiation = false
       if (this.initiator || !this._firstNegotiation) {
         this._debug('starting batched negotiation')
+        console.log('isRestarting: ', this._isRestarting);
         this.negotiate(this._isRestarting)
       } else {
         this._debug('non-initiator initial negotiation request discarded')
