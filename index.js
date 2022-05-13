@@ -390,7 +390,7 @@ class Peer extends stream.Duplex {
       } else {
         this._debug('start negotiation')
         setTimeout(() => { // HACK: Chrome crashes if we immediately call createOffer
-          this._createOffer({ iceRestart: true })
+          this._createOffer(restart)
         }, 0)
       }
       this._isRestarting = restart
@@ -599,43 +599,80 @@ class Peer extends stream.Duplex {
     }, this.iceCompleteTimeout)
   }
 
-  _createOffer() {
+  _createOffer(restart) {
     if (this.destroyed) return
 
-    this._pc.createOffer(this.offerOptions)
-      .then(offer => {
-        if (this.destroyed) return
-        if (!this.trickle && !this.allowHalfTrickle) offer.sdp = filterTrickle(offer.sdp)
-        offer.sdp = this.sdpTransform(offer.sdp)
-
-        const sendOffer = () => {
+    if (restart) {
+      this._pc.createOffer({ iceRestart: true })
+        .then(offer => {
           if (this.destroyed) return
-          const signal = this._pc.localDescription || offer
-          this._debug('signal')
-          this.emit('signal', {
-            type: signal.type,
-            sdp: signal.sdp
-          })
-        }
+          if (!this.trickle && !this.allowHalfTrickle) offer.sdp = filterTrickle(offer.sdp)
+          offer.sdp = this.sdpTransform(offer.sdp)
 
-        const onSuccess = () => {
-          this._debug('createOffer success')
+          const sendOffer = () => {
+            if (this.destroyed) return
+            const signal = this._pc.localDescription || offer
+            this._debug('signal')
+            this.emit('signal', {
+              type: signal.type,
+              sdp: signal.sdp
+            })
+          }
+
+          const onSuccess = () => {
+            this._debug('createOffer success')
+            if (this.destroyed) return
+            if (this.trickle || this._iceComplete) sendOffer()
+            else this.once('_iceComplete', sendOffer) // wait for candidates
+          }
+
+          const onError = err => {
+            this.destroy(errCode(err, 'ERR_SET_LOCAL_DESCRIPTION'))
+          }
+
+          this._pc.setLocalDescription(offer)
+            .then(onSuccess)
+            .catch(onError)
+        })
+        .catch(err => {
+          this.destroy(errCode(err, 'ERR_CREATE_OFFER'))
+        })
+    } else {
+      this._pc.createOffer(this.offerOptions)
+        .then(offer => {
           if (this.destroyed) return
-          if (this.trickle || this._iceComplete) sendOffer()
-          else this.once('_iceComplete', sendOffer) // wait for candidates
-        }
+          if (!this.trickle && !this.allowHalfTrickle) offer.sdp = filterTrickle(offer.sdp)
+          offer.sdp = this.sdpTransform(offer.sdp)
 
-        const onError = err => {
-          this.destroy(errCode(err, 'ERR_SET_LOCAL_DESCRIPTION'))
-        }
+          const sendOffer = () => {
+            if (this.destroyed) return
+            const signal = this._pc.localDescription || offer
+            this._debug('signal')
+            this.emit('signal', {
+              type: signal.type,
+              sdp: signal.sdp
+            })
+          }
 
-        this._pc.setLocalDescription(offer)
-          .then(onSuccess)
-          .catch(onError)
-      })
-      .catch(err => {
-        this.destroy(errCode(err, 'ERR_CREATE_OFFER'))
-      })
+          const onSuccess = () => {
+            this._debug('createOffer success')
+            if (this.destroyed) return
+            if (this.trickle || this._iceComplete) sendOffer()
+            else this.once('_iceComplete', sendOffer) // wait for candidates
+          }
+
+          const onError = err => {
+            this.destroy(errCode(err, 'ERR_SET_LOCAL_DESCRIPTION'))
+          }
+
+          this._pc.setLocalDescription(offer)
+            .then(onSuccess)
+            .catch(onError)
+        })
+        .catch(err => {
+          this.destroy(errCode(err, 'ERR_CREATE_OFFER'))
+        })
+    }
   }
 
   _requestMissingTransceivers() {
