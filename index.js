@@ -729,8 +729,8 @@ class Peer extends stream.Duplex {
     if (this.destroyed) return
     if (this._pc.connectionState === 'failed' && !this.iceRestartEnabled) {
       this.destroy(errCode(new Error('Connection failed.'), 'ERR_CONNECTION_FAILURE'))
-    } else if (this._pc.connectionState === 'failed' && this.iceRestartEnabled) {
-      this._pc.restartIce()
+    } else if (this._pc.connectionState === 'disconnected' && this.iceRestartEnabled) {
+      this._pc = new (this._wrtc.RTCPeerConnection)(this.config)
     }
   }
 
