@@ -390,7 +390,7 @@ class Peer extends stream.Duplex {
       } else {
         this._debug('start negotiation')
         setTimeout(() => { // HACK: Chrome crashes if we immediately call createOffer
-          this._createOffer(restart)
+          this._createOffer({ iceRestart: true })
         }, 0)
       }
       this._isRestarting = restart
